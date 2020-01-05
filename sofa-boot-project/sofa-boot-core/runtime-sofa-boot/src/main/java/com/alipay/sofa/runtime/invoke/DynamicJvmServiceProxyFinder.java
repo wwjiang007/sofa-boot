@@ -23,6 +23,8 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Collection;
 
+import com.alipay.sofa.ark.spi.replay.ReplayContext;
+import com.alipay.sofa.runtime.SofaRuntimeProperties;
 import org.aopalliance.intercept.MethodInvocation;
 
 import com.alipay.sofa.ark.spi.model.Biz;
@@ -56,6 +58,8 @@ public class DynamicJvmServiceProxyFinder {
     @ArkInject
     private BizManagerService bizManagerService;
 
+    private boolean           hasFinishStartup = false;
+
     public static DynamicJvmServiceProxyFinder getDynamicJvmServiceProxyFinder() {
         return dynamicJvmServiceProxyFinder;
     }
@@ -67,21 +71,50 @@ public class DynamicJvmServiceProxyFinder {
             if (sofaRuntimeManager.getAppClassLoader().equals(clientClassloader)) {
                 continue;
             }
+
+            String version = ReplayContext.get();
+
+            if (ReplayContext.PLACEHOLDER.equals(version)) {
+                version = null;
+            }
+
             Biz biz = getBiz(sofaRuntimeManager);
-            if (biz != null && biz.getBizState() == BizState.ACTIVATED) {
-                ServiceComponent serviceComponent = findServiceComponent(uniqueId, interfaceType,
-                    sofaRuntimeManager.getComponentManager());
-                if (serviceComponent != null) {
-                    JvmBinding referenceJvmBinding = (JvmBinding) contract
-                        .getBinding(JvmBinding.JVM_BINDING_TYPE);
-                    JvmBinding serviceJvmBinding = (JvmBinding) serviceComponent.getService()
-                        .getBinding(JvmBinding.JVM_BINDING_TYPE);
-                    boolean serialize = referenceJvmBinding.getJvmBindingParam().isSerialize()
-                                        || serviceJvmBinding.getJvmBindingParam().isSerialize();
-                    return new DynamicJvmServiceInvoker(clientClassloader,
-                        sofaRuntimeManager.getAppClassLoader(), serviceComponent.getService()
-                            .getTarget(), contract, biz.getIdentity(), serialize);
-                }
+            // if null , check next
+            if (biz == null) {
+                continue;
+            }
+
+            // do not match state, check next
+            // https://github.com/sofastack/sofa-boot/issues/532
+            if (hasFinishStartup && biz.getBizState() != BizState.DEACTIVATED
+                && biz.getBizState() != BizState.ACTIVATED) {
+                continue;
+            }
+
+            // if specified version , but version do not match ,check next
+            if (version != null && !version.equals(biz.getBizVersion())) {
+                continue;
+            }
+
+            // if not specified version, but state do not match, check next
+            // https://github.com/sofastack/sofa-boot/issues/532
+            if (hasFinishStartup && version == null && biz.getBizState() != BizState.ACTIVATED) {
+                continue;
+            }
+
+            // match biz
+            ServiceComponent serviceComponent = findServiceComponent(uniqueId, interfaceType,
+                sofaRuntimeManager.getComponentManager());
+            if (serviceComponent != null) {
+                JvmBinding referenceJvmBinding = (JvmBinding) contract
+                    .getBinding(JvmBinding.JVM_BINDING_TYPE);
+                JvmBinding serviceJvmBinding = (JvmBinding) serviceComponent.getService()
+                    .getBinding(JvmBinding.JVM_BINDING_TYPE);
+                boolean serialize = referenceJvmBinding.getJvmBindingParam().isSerialize()
+                                    || serviceJvmBinding.getJvmBindingParam().isSerialize();
+                return new DynamicJvmServiceInvoker(clientClassloader,
+                    sofaRuntimeManager.getAppClassLoader(), serviceComponent.getService()
+                        .getTarget(), contract, biz.getIdentity(), serialize);
             }
         }
         return null;
@@ -125,6 +158,10 @@ public class DynamicJvmServiceProxyFinder {
         return null;
     }
 
+    public void setHasFinishStartup(boolean hasFinishStartup) {
+        this.hasFinishStartup = hasFinishStartup;
+    }
+
     static class DynamicJvmServiceInvoker extends ServiceProxy {
 
         private Contract                 contract;
@@ -151,22 +188,16 @@ public class DynamicJvmServiceProxyFinder {
         @Override
         protected Object doInvoke(MethodInvocation invocation) throws Throwable {
             try {
-                Method targetMethod = invocation.getMethod();
-                Object[] targetArguments = invocation.getArguments();
-
                 SofaLogger
                     .debug(">> Start in Cross App JVM service invoke, the service interface is  - "
                            + getInterfaceType());
 
-                if (!serialize) {
-                    ClassLoader tcl = Thread.currentThread().getContextClassLoader();
-                    try {
-                        pushThreadContextClassLoader(getServiceClassLoader());
-                        return targetMethod.invoke(targetService, targetArguments);
-                    } finally {
-                        pushThreadContextClassLoader(tcl);
-                    }
+                if (getDynamicJvmServiceProxyFinder().bizManagerService != null) {
+                    ReplayContext.setPlaceHolder();
                 }
+
+                Method targetMethod = invocation.getMethod();
+                Object[] targetArguments = invocation.getArguments();
 
                 if (TOSTRING_METHOD.equalsIgnoreCase(targetMethod.getName())
                     && targetMethod.getParameterTypes().length == 0) {
@@ -180,17 +211,30 @@ public class DynamicJvmServiceProxyFinder {
                 }
 
                 Class[] oldArgumentTypes = targetMethod.getParameterTypes();
-
-                final Object[] arguments = (Object[]) hessianTransport(targetArguments, null);
-                final Class[] argumentTypes = (Class[]) hessianTransport(oldArgumentTypes, null);
-
-                Method transformMethod = getTargetMethod(targetMethod, argumentTypes);
-                Object retVal = transformMethod.invoke(targetService, arguments);
-
-                return hessianTransport(retVal, getClientClassloader());
+                Method transformMethod;
+                // check whether skip serialize or not
+                if (!serialize || SofaRuntimeProperties.isSkipJvmSerialize(clientClassloader.get())) {
+                    ClassLoader tcl = Thread.currentThread().getContextClassLoader();
+                    try {
+                        pushThreadContextClassLoader(getServiceClassLoader());
+                        transformMethod = getTargetMethod(targetMethod, oldArgumentTypes);
+                        return transformMethod.invoke(targetService, targetArguments);
+                    } finally {
+                        pushThreadContextClassLoader(tcl);
+                    }
+                } else {
+                    Object[] arguments = (Object[]) hessianTransport(targetArguments, null);
+                    Class[] argumentTypes = (Class[]) hessianTransport(oldArgumentTypes, null);
+                    transformMethod = getTargetMethod(targetMethod, argumentTypes);
+                    Object retVal = transformMethod.invoke(targetService, arguments);
+                    return hessianTransport(retVal, getClientClassloader());
+                }
             } catch (InvocationTargetException ex) {
                 throw ex.getTargetException();
             } finally {
+                if (getDynamicJvmServiceProxyFinder().bizManagerService != null) {
+                    ReplayContext.clearPlaceHolder();
+                }
                 setClientClassloader(null);
             }
         }

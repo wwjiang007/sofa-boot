@@ -27,6 +27,7 @@ import com.alipay.sofa.runtime.api.ServiceRuntimeException;
 import com.alipay.sofa.runtime.api.client.ServiceClient;
 import com.alipay.sofa.runtime.api.component.ComponentName;
 import com.alipay.sofa.runtime.api.component.Property;
+import com.alipay.sofa.runtime.invoke.DynamicJvmServiceProxyFinder;
 import com.alipay.sofa.runtime.log.SofaLogger;
 import com.alipay.sofa.runtime.model.ComponentType;
 import com.alipay.sofa.runtime.service.binding.JvmBinding;
@@ -81,10 +82,6 @@ public class ReferenceComponent extends AbstractComponent {
 
     @Override
     public HealthResult isHealthy() {
-        if (!isActivated()) {
-            return super.isHealthy();
-        }
-
         HealthResult result = new HealthResult(componentName.getRawName());
         List<HealthResult> bindingHealth = new ArrayList<>();
 
@@ -121,14 +118,9 @@ public class ReferenceComponent extends AbstractComponent {
         if (failedBindingHealth.size() == 0) {
             result.setHealthy(true);
         } else {
-            StringBuilder healthReport = new StringBuilder("|");
-            for (HealthResult healthResult : failedBindingHealth) {
-                healthReport.append(healthResult.getHealthName()).append("#")
-                    .append(healthResult.getHealthReport());
-            }
-            result.setHealthReport(healthReport.substring(1, healthReport.length()));
             result.setHealthy(false);
         }
+        result.setHealthReport(aggregateBindingHealth(reference.getBindings()));
 
         return result;
     }
@@ -257,6 +249,11 @@ public class ReferenceComponent extends AbstractComponent {
 
         if (componentInfo != null) {
             serviceTarget = componentInfo.getImplementation().getTarget();
+        }
+
+        if (serviceTarget == null) {
+            serviceTarget = DynamicJvmServiceProxyFinder.getDynamicJvmServiceProxyFinder()
+                .findServiceProxy(sofaRuntimeContext.getAppClassLoader(), reference);
         }
         return serviceTarget;
     }
