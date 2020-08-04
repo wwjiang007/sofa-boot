@@ -20,6 +20,14 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import com.alipay.sofa.healthcheck.HealthCheckProperties;
+import com.alipay.sofa.healthcheck.core.HealthChecker;
+import com.alipay.sofa.healthcheck.test.bean.ApplicationHealthCheckCallback;
+import com.alipay.sofa.healthcheck.test.bean.FailedHealthCheck;
+import com.alipay.sofa.healthcheck.test.bean.HighestOrderReadinessCheckCallback;
+import com.alipay.sofa.healthcheck.test.bean.LowestOrderReadinessCheckCallback;
+import com.alipay.sofa.healthcheck.test.bean.MiddlewareHealthCheckCallback;
+import com.alipay.sofa.healthcheck.test.bean.SuccessHealthCheck;
 import org.junit.Assert;
 import org.junit.Test;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,6 +35,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.Status;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -35,8 +44,6 @@ import com.alipay.sofa.healthcheck.AfterReadinessCheckCallbackProcessor;
 import com.alipay.sofa.healthcheck.HealthCheckerProcessor;
 import com.alipay.sofa.healthcheck.HealthIndicatorProcessor;
 import com.alipay.sofa.healthcheck.ReadinessCheckListener;
-import com.alipay.sofa.healthcheck.test.bean.ApplicationHealthCheckCallback;
-import com.alipay.sofa.healthcheck.test.bean.MiddlewareHealthCheckCallback;
 
 /**
  * @author liangen
@@ -49,7 +56,8 @@ public class AfterHealthReadinessCheckCallbackTest {
 
     @Test
     public void testAfterReadinessCheckCallbackMarked() {
-        initApplicationContext(true, false);
+        initApplicationContext(true, false,
+            AfterHealthReadinessCheckCallbackTestConfiguration.class);
         AfterReadinessCheckCallbackProcessor afterReadinessCheckCallbackProcessor = ctx
             .getBean(AfterReadinessCheckCallbackProcessor.class);
         ApplicationHealthCheckCallback applicationHealthCheckCallback = ctx
@@ -58,22 +66,23 @@ public class AfterHealthReadinessCheckCallbackTest {
         boolean result = afterReadinessCheckCallbackProcessor.afterReadinessCheckCallback(hashMap);
         Assert.assertTrue(result);
         Assert.assertTrue(applicationHealthCheckCallback.isMark());
-        Assert.assertTrue(hashMap.size() == 2);
+        Assert.assertEquals(2, hashMap.size());
         Health middleHealth = hashMap.get("middlewareHealthCheckCallback");
         Health applicationHealth = hashMap.get("applicationHealthCheckCallback");
         Assert.assertNotNull(middleHealth);
         Assert.assertNotNull(applicationHealth);
-        Assert.assertTrue(middleHealth.getStatus().equals(Status.UP));
-        Assert.assertTrue(applicationHealth.getStatus().equals(Status.UP));
-        Assert.assertTrue(middleHealth.getDetails().size() == 1);
-        Assert.assertTrue(applicationHealth.getDetails().size() == 1);
-        Assert.assertTrue("server is ok".equals(middleHealth.getDetails().get("server")));
-        Assert.assertTrue("port is ok".equals(applicationHealth.getDetails().get("port")));
+        Assert.assertEquals(middleHealth.getStatus(), Status.UP);
+        Assert.assertEquals(applicationHealth.getStatus(), Status.UP);
+        Assert.assertEquals(1, middleHealth.getDetails().size());
+        Assert.assertEquals(1, applicationHealth.getDetails().size());
+        Assert.assertEquals("server is ok", middleHealth.getDetails().get("server"));
+        Assert.assertEquals("port is ok", applicationHealth.getDetails().get("port"));
     }
 
     @Test
     public void testAfterReadinessCheckCallbackUnMarked() {
-        initApplicationContext(false, false);
+        initApplicationContext(false, false,
+            AfterHealthReadinessCheckCallbackTestConfiguration.class);
         AfterReadinessCheckCallbackProcessor afterReadinessCheckCallbackProcessor = ctx
             .getBean(AfterReadinessCheckCallbackProcessor.class);
         ApplicationHealthCheckCallback applicationHealthCheckCallback = ctx
@@ -81,32 +90,63 @@ public class AfterHealthReadinessCheckCallbackTest {
         HashMap<String, Health> hashMap = new HashMap<>();
         boolean result = afterReadinessCheckCallbackProcessor.afterReadinessCheckCallback(hashMap);
         Assert.assertFalse(result);
-        Assert.assertTrue(applicationHealthCheckCallback.isMark());
-        Assert.assertTrue(hashMap.size() == 2);
+        Assert.assertFalse(applicationHealthCheckCallback.isMark());
+        Assert.assertEquals(2, hashMap.size());
         Health middleHealth = hashMap.get("middlewareHealthCheckCallback");
         Health applicationHealth = hashMap.get("applicationHealthCheckCallback");
         Assert.assertNotNull(middleHealth);
         Assert.assertNotNull(applicationHealth);
-        Assert.assertTrue(middleHealth.getStatus().equals(Status.DOWN));
-        Assert.assertTrue(applicationHealth.getStatus().equals(Status.UP));
-        Assert.assertTrue(middleHealth.getDetails().size() == 1);
-        Assert.assertTrue("server is bad".equals(middleHealth.getDetails().get("server")));
-        Assert.assertTrue("port is ok".equals(applicationHealth.getDetails().get("port")));
+        Assert.assertEquals(middleHealth.getStatus(), Status.DOWN);
+        Assert.assertEquals(applicationHealth.getStatus(), Status.DOWN);
+        Assert.assertEquals(1, middleHealth.getDetails().size());
+        Assert.assertEquals("server is bad", middleHealth.getDetails().get("server"));
+        Assert.assertTrue(applicationHealth.getDetails().get("invoking").toString()
+            .contains("skipped"));
     }
 
-    private void initApplicationContext(boolean health, boolean mark) {
+    @Test
+    public void testReadinessCheckFailedAndCallbackNotRun() {
+        initApplicationContext(false, false, ReadinessCheckFailedTestConfiguration.class);
+        ApplicationHealthCheckCallback applicationHealthCheckCallback = ctx
+            .getBean(ApplicationHealthCheckCallback.class);
+        Assert.assertFalse(applicationHealthCheckCallback.isMark());
+    }
+
+    @Test
+    public void testBreakingReadinessCheckCallback() {
+        initApplicationContext(false, false, ReadinessCheckCallbackBreakTestConfiguration.class);
+        LowestOrderReadinessCheckCallback callback = ctx
+            .getBean(LowestOrderReadinessCheckCallback.class);
+        Assert.assertFalse(callback.getMark());
+    }
+
+    private void initApplicationContext(boolean health, boolean mark, Class clazz) {
         Map<String, Object> properties = new LinkedHashMap<>();
         properties.put("after-readiness-check-callback-a.health", health);
         properties.put("after-readiness-check-callback-b.mark", mark);
         properties.put("spring.application.name", "AfterHealthReadinessCheckCallbackTest");
-        SpringApplication springApplication = new SpringApplication(
-            AfterHealthReadinessCheckCallbackTestConfiguration.class);
+        SpringApplication springApplication = new SpringApplication(clazz);
         springApplication.setDefaultProperties(properties);
         springApplication.setWebApplicationType(WebApplicationType.NONE);
         ctx = springApplication.run();
     }
 
     @Configuration
+    static class ReadinessCheckCallbackBreakTestConfiguration extends
+                                                             AfterHealthReadinessCheckCallbackTestConfiguration {
+        @Bean
+        public HighestOrderReadinessCheckCallback highestOrderReadinessCheckCallback() {
+            return new HighestOrderReadinessCheckCallback();
+        }
+
+        @Bean
+        public LowestOrderReadinessCheckCallback lowestOrderReadinessCheckCallback() {
+            return new LowestOrderReadinessCheckCallback();
+        }
+    }
+
+    @Configuration
+    @EnableConfigurationProperties(HealthCheckProperties.class)
     static class AfterHealthReadinessCheckCallbackTestConfiguration {
         @Bean
         public MiddlewareHealthCheckCallback middlewareHealthCheckCallback(@Value("${after-readiness-check-callback-a.health:false}") boolean health) {
@@ -136,6 +176,24 @@ public class AfterHealthReadinessCheckCallbackTest {
         @Bean
         public HealthIndicatorProcessor healthIndicatorProcessor() {
             return new HealthIndicatorProcessor();
+        }
+    }
+
+    @Configuration
+    static class ReadinessCheckFailedTestConfiguration extends
+                                                      AfterHealthReadinessCheckCallbackTestConfiguration {
+        @Bean
+        public HealthChecker failedHealthCheck() {
+            return new FailedHealthCheck();
+        }
+    }
+
+    @Configuration
+    static class ReadinessCheckSuccessTestConfiguration extends
+                                                       AfterHealthReadinessCheckCallbackTestConfiguration {
+        @Bean
+        public HealthChecker successHealthCheck() {
+            return new SuccessHealthCheck();
         }
     }
 }

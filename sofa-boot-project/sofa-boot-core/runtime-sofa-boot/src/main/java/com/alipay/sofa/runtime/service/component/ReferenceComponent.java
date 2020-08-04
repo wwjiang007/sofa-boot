@@ -115,13 +115,14 @@ public class ReferenceComponent extends AbstractComponent {
             }
         }
 
-        if (failedBindingHealth.size() == 0) {
-            result.setHealthy(true);
-        } else {
-            result.setHealthy(false);
-        }
-        result.setHealthReport(aggregateBindingHealth(reference.getBindings()));
+        result.setHealthy(failedBindingHealth.size() == 0);
 
+        String report = aggregateBindingHealth(reference.getBindings());
+        if (e != null) {
+            report += " [" + e.getMessage() + "]";
+        }
+
+        result.setHealthReport(report);
         return result;
     }
 
@@ -171,17 +172,16 @@ public class ReferenceComponent extends AbstractComponent {
                                                       + binding.getBindingType()
                                                       + " for reference " + reference + ".");
                 }
-                SofaLogger.info(" >>Un-in Binding [{0}] Begins - {1}.", binding.getBindingType(),
+                SofaLogger.info(" >>Un-in Binding [{}] Begins - {}.", binding.getBindingType(),
                     reference);
                 try {
                     bindingAdapter.unInBinding(reference, binding, sofaRuntimeContext);
                 } finally {
-                    SofaLogger.info(" >>Un-in Binding [{0}] Ends - {1}.", binding.getBindingType(),
+                    SofaLogger.info(" >>Un-in Binding [{}] Ends - {}.", binding.getBindingType(),
                         reference);
                 }
             }
         }
-        removeService();
     }
 
     @Override
@@ -219,19 +219,14 @@ public class ReferenceComponent extends AbstractComponent {
                                               + binding.getBindingType() + " for reference "
                                               + reference + ".");
         }
-        SofaLogger.info(" >>In Binding [{0}] Begins - {1}.", binding.getBindingType(), reference);
+        SofaLogger.info(" >>In Binding [{}] Begins - {}.", binding.getBindingType(), reference);
         Object proxy;
         try {
             proxy = bindingAdapter.inBinding(reference, binding, sofaRuntimeContext);
         } finally {
-            SofaLogger.info(" >>In Binding [{0}] Ends - {1}.", binding.getBindingType(), reference);
+            SofaLogger.info(" >>In Binding [{}] Ends - {}.", binding.getBindingType(), reference);
         }
         return proxy;
-    }
-
-    private void removeService() {
-        sofaRuntimeContext.getClientFactory().getClient(ServiceClient.class)
-            .removeService(reference.getInterfaceType(), 0);
     }
 
     /**

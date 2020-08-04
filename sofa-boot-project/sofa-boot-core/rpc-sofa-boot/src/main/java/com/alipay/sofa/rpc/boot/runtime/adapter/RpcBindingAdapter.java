@@ -20,12 +20,13 @@ import com.alipay.sofa.rpc.boot.container.ConsumerConfigContainer;
 import com.alipay.sofa.rpc.boot.container.ProviderConfigContainer;
 import com.alipay.sofa.rpc.boot.runtime.adapter.helper.ConsumerConfigHelper;
 import com.alipay.sofa.rpc.boot.runtime.adapter.helper.ProviderConfigHelper;
+import com.alipay.sofa.rpc.boot.runtime.adapter.processor.ProcessorContainer;
 import com.alipay.sofa.rpc.boot.runtime.binding.RpcBinding;
 import com.alipay.sofa.rpc.boot.runtime.param.RpcBindingParam;
+import com.alipay.sofa.rpc.common.MockMode;
 import com.alipay.sofa.rpc.config.ConsumerConfig;
 import com.alipay.sofa.rpc.config.ProviderConfig;
 import com.alipay.sofa.rpc.config.RegistryConfig;
-import com.alipay.sofa.rpc.config.ServerConfig;
 import com.alipay.sofa.rpc.log.LogCodes;
 import com.alipay.sofa.rpc.registry.Registry;
 import com.alipay.sofa.rpc.registry.RegistryFactory;
@@ -90,9 +91,12 @@ public abstract class RpcBindingAdapter implements BindingAdapter<RpcBinding> {
             .getRootApplicationContext();
         ProviderConfigContainer providerConfigContainer = applicationContext
             .getBean(ProviderConfigContainer.class);
+        ProcessorContainer processorContainer = applicationContext
+            .getBean(ProcessorContainer.class);
 
         String uniqueName = providerConfigContainer.createUniqueName((Contract) contract, binding);
         ProviderConfig providerConfig = providerConfigContainer.getProviderConfig(uniqueName);
+        processorContainer.processorProvider(providerConfig);
 
         if (providerConfig == null) {
             throw new ServiceRuntimeException(LogCodes.getLog(
@@ -132,11 +136,11 @@ public abstract class RpcBindingAdapter implements BindingAdapter<RpcBinding> {
 
         ApplicationContext applicationContext = sofaRuntimeContext.getSofaRuntimeManager()
             .getRootApplicationContext();
-        ProviderConfigHelper providerConfigHelper = applicationContext
-            .getBean(ProviderConfigHelper.class);
 
-        ProviderConfig providerConfig = providerConfigHelper.getProviderConfig((Contract) contract,
-            binding, target);
+        ProviderConfigContainer providerConfigContainer = applicationContext
+            .getBean(ProviderConfigContainer.class);
+        String key = providerConfigContainer.createUniqueName((Contract) contract, binding);
+        ProviderConfig providerConfig = providerConfigContainer.getProviderConfig(key);
         try {
             providerConfig.unExport();
         } catch (Exception e) {
@@ -159,19 +163,10 @@ public abstract class RpcBindingAdapter implements BindingAdapter<RpcBinding> {
 
         ApplicationContext applicationContext = sofaRuntimeContext.getSofaRuntimeManager()
             .getRootApplicationContext();
-        ProviderConfigHelper providerConfigHelper = applicationContext
-            .getBean(ProviderConfigHelper.class);
         ProviderConfigContainer providerConfigContainer = applicationContext
             .getBean(ProviderConfigContainer.class);
-
-        ProviderConfig metadata = providerConfigHelper.getProviderConfig((Contract) contract,
-            binding, target);
+        String key = providerConfigContainer.createUniqueName((Contract) contract, binding);
         try {
-            String key = providerConfigContainer.createUniqueName((Contract) contract, binding);
-            List<ServerConfig> servers = providerConfigContainer.getProviderConfig(key).getServer();
-            for (ServerConfig server : servers) {
-                server.getServer().unRegisterProcessor(metadata, false);
-            }
             providerConfigContainer.removeProviderConfig(key);
         } catch (Exception e) {
             throw new ServiceRuntimeException(
@@ -196,9 +191,17 @@ public abstract class RpcBindingAdapter implements BindingAdapter<RpcBinding> {
             .getBean(ConsumerConfigHelper.class);
         ConsumerConfigContainer consumerConfigContainer = applicationContext
             .getBean(ConsumerConfigContainer.class);
+        ProcessorContainer processorContainer = applicationContext
+            .getBean(ProcessorContainer.class);
 
         ConsumerConfig consumerConfig = consumerConfigHelper.getConsumerConfig((Contract) contract,
             binding);
+        processorContainer.processorConsumer(consumerConfig);
+
+        if (MockMode.LOCAL.equalsIgnoreCase(binding.getRpcBindingParam().getMockMode())) {
+            consumerConfig.setMockRef(consumerConfigHelper.getMockRef(binding, applicationContext));
+        }
+
         consumerConfigContainer.addConsumerConfig(binding, consumerConfig);
 
         try {
