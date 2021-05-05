@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.alipay.sofa</groupId>
         <artifactId>sofa-boot-parent</artifactId>
-        <version>3.4.2</version>
+        <version>3.7.0-SNAPSHOT</version>
         <relativePath>../sofa-boot-parent</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
@@ -39,6 +39,12 @@
 
         <dependency>
             <groupId>com.alipay.sofa</groupId>
+            <artifactId>startup-sofa-boot</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>com.alipay.sofa</groupId>
             <artifactId>runtime-sofa-boot</artifactId>
             <optional>true</optional>
         </dependency>
@@ -46,7 +52,18 @@
         <dependency>
             <groupId>com.alipay.sofa</groupId>
             <artifactId>sofa-ark-spi</artifactId>
-            <optional>true</optional></dependency>
-    </dependencies>
+            <optional>true</optional>
+        </dependency>
 
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 </project>

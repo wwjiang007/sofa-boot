@@ -22,35 +22,80 @@ import com.alipay.sofa.boot.constant.SofaBootConstants;
 import com.alipay.sofa.runtime.SofaRuntimeProperties;
 
 /**
+ * SofaRuntimeConfigurationProperties is exported by SOFA Runtime plugin in Ark.
+ * Upon installing an Ark module, Thread context classloader will be switched to Biz ClassLoader.
+ *
  * @author xuanbei 18/5/9
  */
 @ConfigurationProperties(SofaBootConstants.PREFIX)
 public class SofaRuntimeConfigurationProperties {
 
+    public boolean isManualReadinessCallback() {
+        return SofaRuntimeProperties.isManualReadinessCallback(Thread.currentThread()
+            .getContextClassLoader());
+    }
+
+    public void setManualReadinessCallback(boolean manualReadinessCallback) {
+        SofaRuntimeProperties.setManualReadinessCallback(Thread.currentThread()
+            .getContextClassLoader(), manualReadinessCallback);
+    }
+
+    public boolean isJvmFilterEnable() {
+        return SofaRuntimeProperties.isJvmFilterEnable();
+    }
+
+    public void setJvmFilterEnable(boolean jvmFilterEnable) {
+        SofaRuntimeProperties.setJvmFilterEnable(jvmFilterEnable);
+    }
+
     public void setSkipJvmReferenceHealthCheck(boolean skipJvmReferenceHealthCheck) {
-        SofaRuntimeProperties.setSkipJvmReferenceHealthCheck(this.getClass().getClassLoader(),
-            skipJvmReferenceHealthCheck);
+        SofaRuntimeProperties.setSkipJvmReferenceHealthCheck(Thread.currentThread()
+            .getContextClassLoader(), skipJvmReferenceHealthCheck);
     }
 
     public void setDisableJvmFirst(boolean disableJvmFirst) {
-        SofaRuntimeProperties.setDisableJvmFirst(this.getClass().getClassLoader(), disableJvmFirst);
+        SofaRuntimeProperties.setDisableJvmFirst(Thread.currentThread().getContextClassLoader(),
+            disableJvmFirst);
     }
 
     public boolean isSkipJvmReferenceHealthCheck() {
-        return SofaRuntimeProperties
-            .isSkipJvmReferenceHealthCheck(this.getClass().getClassLoader());
+        return SofaRuntimeProperties.isSkipJvmReferenceHealthCheck(Thread.currentThread()
+            .getContextClassLoader());
+    }
+
+    public void setExtensionFailureInsulating(boolean extensionFailureInsulating) {
+        SofaRuntimeProperties.setExtensionFailureInsulating(Thread.currentThread()
+            .getContextClassLoader(), extensionFailureInsulating);
+    }
+
+    public boolean isExtensionFailureInsulating() {
+        return SofaRuntimeProperties.isExtensionFailureInsulating(Thread.currentThread()
+            .getContextClassLoader());
     }
 
     public boolean isDisableJvmFirst() {
-        return SofaRuntimeProperties.isDisableJvmFirst(this.getClass().getClassLoader());
+        return SofaRuntimeProperties.isDisableJvmFirst(Thread.currentThread()
+            .getContextClassLoader());
     }
 
     public void setSkipJvmSerialize(boolean skipJvmSerialize) {
-        SofaRuntimeProperties.setSkipJvmSerialize(this.getClass().getClassLoader(),
+        SofaRuntimeProperties.setSkipJvmSerialize(Thread.currentThread().getContextClassLoader(),
             skipJvmSerialize);
     }
 
     public boolean isSkipJvmSerialize() {
-        return SofaRuntimeProperties.isSkipJvmSerialize(this.getClass().getClassLoader());
+        return SofaRuntimeProperties.isSkipJvmSerialize(Thread.currentThread()
+            .getContextClassLoader());
     }
+
+    public void setSkipExtensionHealthCheck(boolean skipExtensionHealthCheck) {
+        SofaRuntimeProperties.setSkipExtensionHealthCheck(Thread.currentThread()
+            .getContextClassLoader(), skipExtensionHealthCheck);
+    }
+
+    public boolean isSkipExtensionHealthCheck() {
+        return SofaRuntimeProperties.isSkipExtensionHealthCheck(Thread.currentThread()
+            .getContextClassLoader());
+    }
+
 }

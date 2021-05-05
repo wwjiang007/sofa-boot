@@ -26,10 +26,32 @@ import com.alipay.sofa.runtime.spi.component.SofaRuntimeContext;
  */
 public class SofaRuntimeProperties {
 
-    private static ConcurrentHashMap<ClassLoader, Boolean> skipJvmReferenceHealthCheckMap = new ConcurrentHashMap<>();
-    private static ConcurrentHashMap<ClassLoader, Boolean> disableJvmFirstMap             = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<ClassLoader, Boolean> skipJvmReferenceHealthCheckMap = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<ClassLoader, Boolean> skipExtensionHealthCheckMap    = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<ClassLoader, Boolean> disableJvmFirstMap             = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<ClassLoader, Boolean> skipJvmSerializeMap            = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<ClassLoader, Boolean> extensionFailureInsulatingMap  = new ConcurrentHashMap<>();
 
-    private static ConcurrentHashMap<ClassLoader, Boolean> skipJvmSerializeMap            = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<ClassLoader, Boolean> manualReadinessCallbackMap     = new ConcurrentHashMap<>();
+    private static boolean                                       jvmFilterEnable                = false;
+
+    public static boolean isManualReadinessCallback(ClassLoader classLoader) {
+        return manualReadinessCallbackMap.get(classLoader) != null
+               && manualReadinessCallbackMap.get(classLoader);
+    }
+
+    public static void setManualReadinessCallback(ClassLoader classLoader,
+                                                  boolean manualReadinessCallback) {
+        manualReadinessCallbackMap.putIfAbsent(classLoader, manualReadinessCallback);
+    }
+
+    public static boolean isJvmFilterEnable() {
+        return jvmFilterEnable;
+    }
+
+    public static void setJvmFilterEnable(boolean jvmFilterEnable) {
+        SofaRuntimeProperties.jvmFilterEnable = jvmFilterEnable;
+    }
 
     public static boolean isSkipJvmReferenceHealthCheck(SofaRuntimeContext sofaRuntimeContext) {
         return isSkipJvmReferenceHealthCheck(sofaRuntimeContext.getAppClassLoader());
@@ -43,6 +65,30 @@ public class SofaRuntimeProperties {
     public static void setSkipJvmReferenceHealthCheck(ClassLoader classLoader,
                                                       boolean skipJvmReferenceHealthCheck) {
         skipJvmReferenceHealthCheckMap.putIfAbsent(classLoader, skipJvmReferenceHealthCheck);
+    }
+
+    public static boolean isExtensionFailureInsulating(ClassLoader classLoader) {
+        return extensionFailureInsulatingMap.get(classLoader) != null
+               && extensionFailureInsulatingMap.get(classLoader);
+    }
+
+    public static void setExtensionFailureInsulating(ClassLoader classLoader,
+                                                     boolean extensionFailureInsulating) {
+        extensionFailureInsulatingMap.putIfAbsent(classLoader, extensionFailureInsulating);
+    }
+
+    public static boolean isSkipExtensionHealthCheck(SofaRuntimeContext sofaRuntimeContext) {
+        return isSkipExtensionHealthCheck(sofaRuntimeContext.getAppClassLoader());
+    }
+
+    public static boolean isSkipExtensionHealthCheck(ClassLoader classLoader) {
+        return skipExtensionHealthCheckMap.get(classLoader) != null
+               && skipExtensionHealthCheckMap.get(classLoader);
+    }
+
+    public static void setSkipExtensionHealthCheck(ClassLoader classLoader,
+                                                   boolean skipExtensionHealthCheck) {
+        skipExtensionHealthCheckMap.putIfAbsent(classLoader, skipExtensionHealthCheck);
     }
 
     public static boolean isDisableJvmFirst(SofaRuntimeContext sofaRuntimeContext) {

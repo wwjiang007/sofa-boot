@@ -16,23 +16,9 @@
  */
 package com.alipay.sofa.isle.stage;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Future;
-import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.context.support.AbstractApplicationContext;
-import org.springframework.util.StringUtils;
-
 import com.alipay.sofa.boot.constant.SofaBootConstants;
 import com.alipay.sofa.boot.util.NamedThreadFactory;
+import com.alipay.sofa.common.thread.SofaThreadPoolExecutor;
 import com.alipay.sofa.isle.ApplicationRuntimeModel;
 import com.alipay.sofa.isle.deployment.DependencyTree;
 import com.alipay.sofa.isle.deployment.DeploymentDescriptor;
@@ -40,7 +26,22 @@ import com.alipay.sofa.isle.deployment.DeploymentException;
 import com.alipay.sofa.isle.loader.DynamicSpringContextLoader;
 import com.alipay.sofa.isle.loader.SpringContextLoader;
 import com.alipay.sofa.isle.spring.config.SofaModuleProperties;
+import com.alipay.sofa.runtime.api.component.ComponentName;
 import com.alipay.sofa.runtime.log.SofaLogger;
+import com.alipay.sofa.runtime.spi.component.ComponentInfo;
+import com.alipay.sofa.runtime.spi.component.Implementation;
+import com.alipay.sofa.runtime.spi.util.ComponentNameFactory;
+import com.alipay.sofa.runtime.spring.SpringContextComponent;
+import com.alipay.sofa.runtime.spring.SpringContextImplementation;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.support.AbstractApplicationContext;
+import org.springframework.util.StringUtils;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.*;
 
 /**
  * @author linfengqi
@@ -52,7 +53,7 @@ public class SpringContextInstallStage extends AbstractPipelineStage {
     private static final String  SYMBOLIC1 = "  ├─ ";
     private static final String  SYMBOLIC2 = "  └─ ";
 
-    private static final int     CPU_COUNT = Runtime.getRuntime().availableProcessors();
+    private static final int     CPU_COUNT = Runtime.getRuntime().availableProcessors(); ;
 
     @Autowired
     private SofaModuleProperties sofaModuleProperties;
@@ -90,8 +91,8 @@ public class SpringContextInstallStage extends AbstractPipelineStage {
         return new DynamicSpringContextLoader(applicationContext);
     }
 
-    private void installSpringContext(ApplicationRuntimeModel application,
-                                      SpringContextLoader springContextLoader) {
+    protected void installSpringContext(ApplicationRuntimeModel application,
+                                        SpringContextLoader springContextLoader) {
         ClassLoader oldClassLoader = Thread.currentThread().getContextClassLoader();
 
         for (DeploymentDescriptor deployment : application.getResolvedDeployments()) {
@@ -182,9 +183,10 @@ public class SpringContextInstallStage extends AbstractPipelineStage {
     private void refreshSpringContextParallel(ApplicationRuntimeModel application) {
         ClassLoader oldClassLoader = Thread.currentThread().getContextClassLoader();
         List<DeploymentDescriptor> coreRoots = new ArrayList<>();
-        ThreadPoolExecutor executor = new ThreadPoolExecutor(CPU_COUNT + 1, CPU_COUNT + 1, 60,
+        ThreadPoolExecutor executor = new SofaThreadPoolExecutor(CPU_COUNT + 1, CPU_COUNT + 1, 60,
             TimeUnit.MILLISECONDS, new SynchronousQueue<Runnable>(), new NamedThreadFactory(
-                "sofa-module-start"), new ThreadPoolExecutor.CallerRunsPolicy());
+                "sofa-module-start"), new ThreadPoolExecutor.CallerRunsPolicy(),
+            "sofa-module-start", "sofa-boot", 60, 30, TimeUnit.SECONDS);
         try {
             for (DeploymentDescriptor deployment : application.getResolvedDeployments()) {
                 DependencyTree.Entry entry = application.getDeployRegistry().getEntry(
@@ -275,8 +277,8 @@ public class SpringContextInstallStage extends AbstractPipelineStage {
         }));
     }
 
-    private void doRefreshSpringContext(DeploymentDescriptor deployment,
-                                        ApplicationRuntimeModel application) {
+    protected void doRefreshSpringContext(DeploymentDescriptor deployment,
+                                          ApplicationRuntimeModel application) {
         SofaLogger.info("Begin refresh Spring Application Context of module {} of application {}.",
             deployment.getName(), application.getAppName());
         ConfigurableApplicationContext ctx = (ConfigurableApplicationContext) deployment
@@ -285,6 +287,7 @@ public class SpringContextInstallStage extends AbstractPipelineStage {
             try {
                 deployment.startDeploy();
                 ctx.refresh();
+                publishContextAsSofaComponent(deployment, application, ctx);
                 application.addInstalled(deployment);
             } catch (Throwable t) {
                 SofaLogger.error(
@@ -302,16 +305,25 @@ public class SpringContextInstallStage extends AbstractPipelineStage {
         }
     }
 
+    private void publishContextAsSofaComponent(DeploymentDescriptor deployment,
+                                               ApplicationRuntimeModel application,
+                                               ApplicationContext context) {
+        ComponentName componentName = ComponentNameFactory.createComponentName(
+            SpringContextComponent.SPRING_COMPONENT_TYPE, deployment.getModuleName());
+        Implementation implementation = new SpringContextImplementation(context);
+        ComponentInfo componentInfo = new SpringContextComponent(componentName, implementation,
+            application.getSofaRuntimeContext());
+        application.getSofaRuntimeContext().getComponentManager().register(componentInfo);
+    }
+
     private void writeMessageToStringBuilder(StringBuilder sb, List<DeploymentDescriptor> deploys,
                                              String info) {
-        sb.append("\n").append(info).append("(").append(deploys.size()).append(") >>>>>>>\n");
-        for (Iterator<DeploymentDescriptor> i = deploys.iterator(); i.hasNext();) {
-            DeploymentDescriptor dd = i.next();
-            String treeSymbol = SYMBOLIC1;
-            if (!i.hasNext()) {
-                treeSymbol = SYMBOLIC2;
-            }
-            sb.append(treeSymbol).append(dd.getName()).append("\n");
+        int size = deploys.size();
+        sb.append("\n").append(info).append("(").append(size).append(") >>>>>>>\n");
+
+        for (int i = 0; i < size; ++i) {
+            String symbol = i == size - 1 ? SYMBOLIC2 : SYMBOLIC1;
+            sb.append(symbol).append(deploys.get(i).getName()).append("\n");
         }
     }
 

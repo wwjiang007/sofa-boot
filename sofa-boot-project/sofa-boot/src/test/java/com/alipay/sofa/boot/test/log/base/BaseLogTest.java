@@ -16,50 +16,24 @@
  */
 package com.alipay.sofa.boot.test.log.base;
 
-import java.lang.reflect.Field;
-import java.util.Map;
-
 import com.alipay.sofa.boot.log.InfraLoggerFactory;
-import com.alipay.sofa.boot.logging.CommonLoggingApplicationListener;
 import com.alipay.sofa.common.log.Constants;
 import com.alipay.sofa.common.log.MultiAppLoggerSpaceManager;
-import com.alipay.sofa.common.log.SpaceId;
-import com.alipay.sofa.common.log.env.LogEnvUtils;
+import org.junit.Before;
 
 /**
  * LogTestBase
- * <p/>
+ *
  * Created by yangguanchao on 18/01/04.
  */
 public abstract class BaseLogTest {
 
     public static final String restLogLevel = Constants.LOG_LEVEL_PREFIX
                                               + InfraLoggerFactory.INFRASTRUCTURE_LOG_SPACE;
-    private static Map         SPACES_MAP;
-    private static Field       globalSystemProperties;
 
-    static {
-        try {
-            Field field = MultiAppLoggerSpaceManager.class.getDeclaredField("SPACES_MAP");
-            field.setAccessible(true);
-            SPACES_MAP = (Map) field.get(null);
-
-            globalSystemProperties = LogEnvUtils.class.getDeclaredField("globalSystemProperties");
-            globalSystemProperties.setAccessible(true);
-        } catch (Throwable throwable) {
-            // ignore
-        }
-    }
-
-    public void before() throws Exception {
-        SPACES_MAP.remove(new SpaceId(InfraLoggerFactory.INFRASTRUCTURE_LOG_SPACE));
-        new CommonLoggingApplicationListener().setReInitialize(true);
-    }
-
-    public void after() throws Exception {
-        //关闭禁用开关
-        System.clearProperty(Constants.LOGBACK_MIDDLEWARE_LOG_DISABLE_PROP_KEY);
-        System.clearProperty(Constants.LOG4J2_MIDDLEWARE_LOG_DISABLE_PROP_KEY);
-        System.clearProperty(Constants.LOG4J_MIDDLEWARE_LOG_DISABLE_PROP_KEY);
+    @Before
+    public void before() {
+        MultiAppLoggerSpaceManager
+            .removeILoggerFactoryBySpaceName(InfraLoggerFactory.INFRASTRUCTURE_LOG_SPACE);
     }
 }

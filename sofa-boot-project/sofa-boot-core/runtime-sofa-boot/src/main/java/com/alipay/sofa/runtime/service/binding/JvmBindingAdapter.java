@@ -19,6 +19,9 @@ package com.alipay.sofa.runtime.service.binding;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 
+import com.alipay.sofa.runtime.SofaRuntimeProperties;
+import com.alipay.sofa.runtime.filter.JvmFilterContext;
+import com.alipay.sofa.runtime.filter.JvmFilterHolder;
 import org.aopalliance.intercept.MethodInvocation;
 import org.springframework.aop.framework.ProxyFactory;
 
@@ -149,6 +152,55 @@ public class JvmBindingAdapter implements BindingAdapter<JvmBinding> {
         }
 
         @Override
+        public Object invoke(MethodInvocation invocation) throws Throwable {
+            if (!SofaRuntimeProperties.isJvmFilterEnable()) {
+                // Jvm filtering is not enabled
+                return super.invoke(invocation);
+            }
+
+            ClassLoader oldClassLoader = Thread.currentThread().getContextClassLoader();
+            JvmFilterContext context = new JvmFilterContext(invocation);
+            Object rtn;
+
+            if (getTarget() == null) {
+                ServiceComponent serviceComponent = DynamicJvmServiceProxyFinder
+                    .getDynamicJvmServiceProxyFinder().findServiceComponent(
+                        sofaRuntimeContext.getAppClassLoader(), contract);
+                if (serviceComponent == null) {
+                    // Jvm service is not found in normal or Ark environment
+                    // We're actually invoking an RPC service, skip Jvm filtering
+                    return super.invoke(invocation);
+                }
+                context.setSofaRuntimeContext(serviceComponent.getContext());
+            } else {
+                context.setSofaRuntimeContext(sofaRuntimeContext);
+            }
+
+            long startTime = System.currentTimeMillis();
+            try {
+                Thread.currentThread().setContextClassLoader(serviceClassLoader);
+                // Do Jvm filter <code>before</code> invoking
+                // if some filter returns false, skip remaining filters and actual Jvm invoking
+                if (JvmFilterHolder.beforeInvoking(context)) {
+                    rtn = doInvoke(invocation);
+                    context.setInvokeResult(rtn);
+                }
+            } catch (Throwable e) {
+                // Exception occurs, set <code>e</code> in Jvm context
+                context.setException(e);
+                doCatch(invocation, e, startTime);
+                throw e;
+            } finally {
+                // Do Jvm Filter <code>after</code> invoking regardless of the fact whether exception happens or not
+                JvmFilterHolder.afterInvoking(context);
+                rtn = context.getInvokeResult();
+                doFinally(invocation, startTime);
+                Thread.currentThread().setContextClassLoader(oldClassLoader);
+            }
+            return rtn;
+        }
+
+        @Override
         public Object doInvoke(MethodInvocation invocation) throws Throwable {
             if (binding.isDestroyed()) {
                 throw new IllegalStateException("Can not call destroyed reference! JVM Reference["
@@ -250,5 +302,4 @@ public class JvmBindingAdapter implements BindingAdapter<JvmBinding> {
             return contract.getUniqueId();
         }
     }
-
 }

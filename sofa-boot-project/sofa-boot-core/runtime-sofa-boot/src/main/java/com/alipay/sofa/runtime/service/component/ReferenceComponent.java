@@ -24,7 +24,6 @@ import java.util.concurrent.CountDownLatch;
 
 import com.alipay.sofa.runtime.SofaRuntimeProperties;
 import com.alipay.sofa.runtime.api.ServiceRuntimeException;
-import com.alipay.sofa.runtime.api.client.ServiceClient;
 import com.alipay.sofa.runtime.api.component.ComponentName;
 import com.alipay.sofa.runtime.api.component.Property;
 import com.alipay.sofa.runtime.invoke.DynamicJvmServiceProxyFinder;
@@ -120,6 +119,7 @@ public class ReferenceComponent extends AbstractComponent {
         String report = aggregateBindingHealth(reference.getBindings());
         if (e != null) {
             report += " [" + e.getMessage() + "]";
+            result.setHealthy(false);
         }
 
         result.setHealthReport(report);
@@ -139,6 +139,8 @@ public class ReferenceComponent extends AbstractComponent {
                     if (JvmBinding.JVM_BINDING_TYPE.getType().equals(binding.getName())) {
                         candidate = binding;
                     } else {
+                        // Under normal RPC reference (local-first/jvm-first is not set to false) binding,
+                        // backup proxy is the RPC proxy, which will be invoked if Jvm service is not found
                         backupProxy = createProxy(reference, binding);
                     }
                 }

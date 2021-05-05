@@ -16,9 +16,11 @@
  */
 package com.alipay.sofa.boot.autoconfigure.isle;
 
+import com.alipay.sofa.isle.spring.SofaModuleContextLifecycle;
 import com.alipay.sofa.isle.spring.share.SofaModulePostProcessorShareManager;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -29,8 +31,7 @@ import com.alipay.sofa.isle.ApplicationRuntimeModel;
 import com.alipay.sofa.isle.profile.DefaultSofaModuleProfileChecker;
 import com.alipay.sofa.isle.profile.SofaModuleProfileChecker;
 import com.alipay.sofa.isle.spring.config.SofaModuleProperties;
-import com.alipay.sofa.isle.spring.listener.SofaModuleBeanFactoryPostProcessor;
-import com.alipay.sofa.isle.spring.listener.SofaModuleContextRefreshedListener;
+import com.alipay.sofa.isle.spring.SofaModuleBeanFactoryPostProcessor;
 import com.alipay.sofa.isle.stage.DefaultPipelineContext;
 import com.alipay.sofa.isle.stage.ModelCreatingStage;
 import com.alipay.sofa.isle.stage.ModuleLogOutputStage;
@@ -43,6 +44,7 @@ import com.alipay.sofa.isle.stage.SpringContextInstallStage;
 @Configuration
 @EnableConfigurationProperties(SofaModuleProperties.class)
 @ConditionalOnClass(ApplicationRuntimeModel.class)
+@ConditionalOnProperty(value = "com.alipay.sofa.boot.enable-isle", matchIfMissing = true)
 public class SofaModuleAutoConfiguration {
 
     @Bean
@@ -53,8 +55,8 @@ public class SofaModuleAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public SofaModuleContextRefreshedListener sofaModuleContextRefreshedListener() {
-        return new SofaModuleContextRefreshedListener();
+    public SofaModuleContextLifecycle sofaModuleContextLifecycle() {
+        return new SofaModuleContextLifecycle();
     }
 
     @Bean

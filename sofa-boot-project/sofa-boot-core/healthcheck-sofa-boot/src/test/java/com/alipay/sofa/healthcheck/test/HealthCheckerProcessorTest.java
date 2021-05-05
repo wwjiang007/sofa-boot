@@ -25,6 +25,7 @@ import java.util.Map;
 import com.alipay.sofa.healthcheck.HealthCheckProperties;
 import com.alipay.sofa.healthcheck.impl.ComponentHealthChecker;
 import com.alipay.sofa.runtime.component.impl.StandardSofaRuntimeManager;
+import com.alipay.sofa.runtime.configure.SofaRuntimeConfigurationProperties;
 import com.alipay.sofa.runtime.spi.component.SofaRuntimeContext;
 import com.alipay.sofa.runtime.spi.component.SofaRuntimeManager;
 import org.junit.Assert;
@@ -60,7 +61,8 @@ public class HealthCheckerProcessorTest {
     private ApplicationContext applicationContext;
 
     @Configuration
-    @EnableConfigurationProperties(HealthCheckProperties.class)
+    @EnableConfigurationProperties({ HealthCheckProperties.class,
+            SofaRuntimeConfigurationProperties.class })
     static class HealthCheckerProcessorTestConfiguration {
         @Bean
         public DiskHealthChecker diskHealthChecker() {
@@ -189,7 +191,7 @@ public class HealthCheckerProcessorTest {
             .getBean(HealthCheckerProcessor.class);
         MemoryHealthChecker memoryHealthChecker = applicationContext
             .getBean(MemoryHealthChecker.class);
-        boolean result = healthCheckerProcessor.livenessHealthCheck(hashMap);
+        healthCheckerProcessor.livenessHealthCheck(hashMap);
         Health memoryHealth = hashMap.get("memoryHealthChecker");
         Health networkHealth = hashMap.get("networkHealthChecker");
         Assert.assertTrue(true);
